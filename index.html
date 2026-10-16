@@ -473,6 +473,21 @@ svg.chart2 .guide.hot{opacity:.55}
 .settile:hover{box-shadow:0 0 0 1px var(--accent-bg),0 16px 36px rgba(31,157,107,.18)}
 .panel{transition:box-shadow .25s,transform .25s}
 @media (hover:hover){.panel:hover{box-shadow:0 14px 38px rgba(20,20,50,.11)}}
+
+/* Sidebar-Icons: wie die Kacheln */
+aside.side button.nv{transition:transform .22s cubic-bezier(.2,.8,.2,1),box-shadow .22s,background-color .2s,color .2s}
+aside.side button.nv .i{transition:transform .22s cubic-bezier(.2,.8,.2,1),color .2s}
+aside.side button.nv:hover{transform:translateY(-2px);background:var(--accent-bg);color:var(--accent-d);box-shadow:0 0 0 1px color-mix(in srgb,var(--accent) 30%,transparent),0 10px 24px color-mix(in srgb,var(--accent) 24%,transparent)}
+aside.side button.nv:hover .i{transform:scale(1.14)}
+.collapse:hover{transform:translateY(-1px)}
+
+/* Schwebendes Plus */
+.fab{position:fixed;right:30px;bottom:30px;width:64px;height:64px;border-radius:50%;border:0;color:#fff;display:grid;place-items:center;z-index:40;background:linear-gradient(145deg,#37d6a2,#1a8f6a);box-shadow:0 10px 28px rgba(26,143,106,.45),inset 0 1px 0 rgba(255,255,255,.4);transition:transform .25s cubic-bezier(.2,.8,.2,1),box-shadow .25s;view-transition-name:fab}
+.fab:hover{transform:translateY(-4px) scale(1.06);box-shadow:0 16px 38px rgba(26,143,106,.55),0 0 0 6px rgba(52,199,150,.18),inset 0 1px 0 rgba(255,255,255,.4)}
+.fab:active{transform:scale(.94)}
+.fab svg{transition:transform .3s}.fab:hover svg{transform:rotate(90deg)}
+#modal.on~.fab,body:has(#modal.on) .fab{opacity:0;pointer-events:none}
+@media (max-width:899px){.fab{right:18px;bottom:calc(88px + env(safe-area-inset-bottom));width:58px;height:58px}}
 </style>
 </head>
 <body>
@@ -770,8 +785,8 @@ const scopeLabel = {all:'Haushalt', NJ:'Nicola', VS:'Vanessa'};
 const pick = (c,scope) => scope==='NJ'?c.N : scope==='VS'?c.V : c.H;
 const itemAmt = (it,scope) => scope==='NJ'?it.n : scope==='VS'?it.v : it.n+it.v;
 const WER_OPT = [['NJ','Nicola'],['VS','Vanessa'],['50/50','50/50']];
-const chips = e => e.konto==='einkauf'?'<span class="chip ek">Einkaufskonto</span>':'';
-const ART_OPT = [['Monatlich','Monatlich'],['Einmalig','Einmalig'],['Jährlich','Jährlich'],['Lohn','Weitere Einnahme'],['Ausgleich:VS','Zahlung Vanessa → Nicola'],['Ausgleich:NJ','Zahlung Nicola → Vanessa']];
+const chips = e => (e.konto==='einkauf'?'<span class="chip ek">Einkaufskonto</span>':'')+(e.wer==='50/50'&&e.art!=='Ausgleich'&&e.pv!=null&&+e.pv!==50?`<span class="chip">Vanessa ${+e.pv} %</span>`:'');
+const ART_OPT = [['Monatlich','Monatlich'],['Einmalig','Einmalig'],['Jährlich','Jährlich'],['Lohn','Weitere Einnahme'],['Ausgleich:VS','Vanessa → Nicola'],['Ausgleich:NJ','Nicola → Vanessa']];
 const artSel = e => e.art==='Ausgleich'?'Ausgleich:'+(e.von||'VS'):e.art;
 
 /* ============ Bausteine ============ */
@@ -792,6 +807,8 @@ function topbar(title,{month=false,year=false,scope=false}={}){
 }
 
 /* ============ Einträge (direkt bearbeitbar) ============ */
+const WRANK={NJ:0,VS:1,'50/50':2};
+const entrySort=(a,b)=>(WRANK[a.wer]??3)-(WRANK[b.wer]??3)||(+b.betrag||0)-(+a.betrag||0)||(a.name||'').localeCompare(b.name||'','de');
 const canEditId = id => { const e=S.entries.find(x=>x.id===id); return !e || canEdit(e); };
 const isMobile=()=>window.matchMedia('(max-width:899px)').matches;
 try{ window.matchMedia('(max-width:899px)').addEventListener('change',()=>{ if(ui.phase==='app') render(); }); }catch{}
@@ -802,16 +819,17 @@ function mrow(e){
 }
 function erow(e){
   const st=status(e,ui.key), m=monthlyAmount(e), s=shares(e.wer,e.pv), on=st==='on', ce=canEdit(e), adm=isAdmin(), dis=ce?'':'disabled';
+  const mm=r05(m), vv=r05(mm*s.v), tr=e.art==='Ausgleich', amN=tr?(e.von==='NJ'?r05(e.betrag):0):r05(mm-vv), amV=tr?(e.von==='NJ'?0:r05(e.betrag)):vv;
   const opt=(list,v)=>list.map(([val,l])=>`<option value="${esc(val)}" ${v===val?'selected':''}>${l}</option>`).join('');
   return `<div class="erow ${st}" data-eid="${e.id}" data-art="${e.art}">
    <div class="c name"><span class="lb">Beschreibung</span><input data-f="name" value="${esc(e.name)}" placeholder="Beschreibung" autocomplete="off" ${dis}>${chips(e)?`<div class="chips">${chips(e)}</div>`:''}</div>
    <div class="c art"><span class="lb">Art</span><select data-f="art" ${dis}>${opt(ART_OPT.filter(a=>adm||!a[0].startsWith('Ausgleich')),artSel(e))}</select></div>
    <div class="c bet"><span class="lb">${e.art==='Jährlich'?'Jahresbetrag':'Betrag'}</span><input class="num" data-f="betrag" type="number" step="any" inputmode="decimal" value="${e.betrag}" style="text-align:right" ${dis}></div>
-   ${e.art==='Ausgleich'?`<div class="c wer"><span class="lb">Zahlung</span><span class="dim" style="padding:0 7px">${e.von==='NJ'?'Nicola → Vanessa':'Vanessa → Nicola'}</span></div>`:`<div class="c wer who-${e.wer==='50/50'?'b':e.wer}"><span class="lb">Wer trägt</span><select data-f="wer" ${dis}>${opt(WER_OPT,e.wer)}</select></div>`}
+   ${e.art==='Ausgleich'?`<div class="c wer"><span class="lb">Zahlung</span><span class="dim" style="padding:0 7px">einmalig</span></div>`:`<div class="c wer who-${e.wer==='50/50'?'b':e.wer}"><span class="lb">Wer trägt</span><select data-f="wer" ${dis}>${opt(WER_OPT,e.wer)}</select></div>`}
    <div class="c ab"><span class="lb">${oneShot(e.art)?'Monat':'Ab'}</span><input data-f="ab" type="month" value="${toInput(e.ab)}" ${dis}></div>
-   <div class="c bis"><span class="lb">Bis</span><input data-f="bis" type="month" value="${toInput(e.bis)}" ${oneShot(e.art)||!ce?'disabled':''}></div>
-   ${adm?`<div class="c an num ${on?'':'dim'}"><span class="lb">Nicola</span>${on&&s.n?fmt(m*s.n):'–'}</div>`:'<div class="c an"></div>'}
-   <div class="c av num ${on?'':'dim'}"><span class="lb">Vanessa</span>${on&&s.v?fmt(m*s.v):'–'}</div>
+   <div class="c bis"><span class="lb">Bis</span>${oneShot(e.art)?'<span class="dim" style="padding:0 8px">–</span>':`<input data-f="bis" type="month" value="${toInput(e.bis)}" ${!ce?'disabled':''}>`}</div>
+   ${adm?`<div class="c an num ${on?'':'dim'}"><span class="lb">Nicola</span>${on&&amN?fmt(amN):'–'}</div>`:'<div class="c an"></div>'}
+   <div class="c av num ${on?'':'dim'}"><span class="lb">Vanessa</span>${on&&amV?fmt(amV):'–'}</div>
    <div class="c act">${ce?`<button class="ib" data-edit="${e.id}" title="Details, Kategorie, Betrag ab Monat ändern">✎</button><button class="ib" data-delrow="${e.id}" title="Löschen">🗑</button>`:'<span title="Gemeinsamer Eintrag, nur Nicola kann ihn ändern">🔒</span>'}</div></div>`;
 }
 function viewEntries(){
@@ -827,16 +845,16 @@ function viewEntries(){
   h+=`<div class="fbar"><input type="search" data-q placeholder="Suchen …" value="${esc(ui.q)}">
    <select data-fkat><option value="">Alle Kategorien</option>${[...cats(),'Lohn','Ausgleich'].map(c=>`<option value="${esc(c)}" ${ui.fKat===c?'selected':''}>${esc(grpName(c))}</option>`).join('')}</select>
    <select data-fstat>${[['on','Gültig im '+MONTHS[ymOf(k).m-1]],['all','Alle'],['past','Abgelaufen'],['future','Geplant']].map(([v,l])=>`<option value="${v}" ${ui.fStat===v?'selected':''}>${l}</option>`).join('')}</select>
-   <span style="flex:1"></span><button class="btn" data-act="add">Eintrag hinzufügen</button></div>`;
+   </div>`;
   const names=order.filter(g=>groups[g]||(!q&&!ui.fKat&&ui.fStat==='on'&&g!=='Lohn'&&g!=='Ausgleich'));
   names.forEach(g=>{
     const arr=groups[g]||[];
     const sum=arr.filter(e=>isActive(e,k)).reduce((a,e)=>{const s=shares(e.wer),m=monthlyAmount(e); return a+m*(ui.scope==='NJ'?s.n:ui.scope==='VS'?s.v:1);},0);
     h+=`<div class="egroup"><div class="eg-h"><span>${esc(grpName(g))}</span><span><span class="sum num">${arr.length&&g!=='Ausgleich'?fmt(sum)+' / Monat':''}</span>${g==='Ausgleich'&&!isAdmin()?'':`<button class="btn sec sm" data-addin="${esc(g)}">＋ Zeile</button>`}</span></div>`;
     if(arr.length){
-      if(isMobile()) h+=arr.sort((a,b)=>b.betrag-a.betrag).map(mrow).join(''); else {
+      if(isMobile()) h+=arr.sort(entrySort).map(mrow).join(''); else {
       h+=`<div class="ehead"><span>Beschreibung</span><span>Art</span><span class="r">Betrag</span><span>Wer zahlt</span><span>Ab</span><span>Bis</span>${isAdmin()?'<span class="r">Nicola</span>':'<span></span>'}<span class="r">Vanessa</span><span></span></div>`;
-      h+=arr.sort((a,b)=>(a.name||'').localeCompare(b.name||'','de')).map(erow).join(''); }
+      h+=arr.sort(entrySort).map(erow).join(''); }
     } else h+=`<div class="empty" style="padding:12px">Keine Einträge in diesem Filter.</div>`;
     h+=`</div>`;
   });
@@ -847,7 +865,7 @@ function viewEntries(){
 
 /* ============ Admin / Verwaltung ============ */
 /* ============ Einstellungen ============ */
-const APP_VERSION='2026.10.16-2';
+const APP_VERSION='2026.10.16-3';
 const autoUpd = () => lsGet('budget_autoupd','1')!=='0';
 function installPanel(){
   const standalone=window.matchMedia('(display-mode: standalone)').matches||navigator.standalone;
@@ -1023,6 +1041,7 @@ function render(){
     app.innerHTML=`<div class="shell ${ui.side==='closed'?'mini':''}" data-sig="${esc(sig)}"><aside class="side">${sideHtml(fb,mail)}</aside><main class="main"></main></div>`;
     shell=app.querySelector('.shell');
   }
+  if(!shell.querySelector('.fab')) shell.insertAdjacentHTML('beforeend','<button class="fab" data-act="add" aria-label="Eintrag oder Zahlung hinzufügen" title="Neuer Eintrag"><svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>');
   shell.querySelectorAll('.nv').forEach(b=>b.classList.toggle('on',b.dataset.tab===ui.tab));
   const main=shell.querySelector('.main');
   main.innerHTML=(ui.updAvail&&!autoUpd()?`<div class="updbar">Neue Version verfügbar <button class="btn sm" data-act="upd-now">Jetzt aktualisieren</button></div>`:'')+body;
@@ -1246,7 +1265,7 @@ const secOf = it => it.art==='Jährlich'?'steuer':it.art==='Monatlich'&&it.konto
 function viewDash(){
   const md=monthData(ui.key), c=calc(md), sc=ui.scope, P=pick(c,sc), cur=nowKey(), adm=isAdmin();
   const empty = !S.entries.length && !Object.keys(S.lohn).length;
-  let h=`<div class="topbar"><h1>Übersicht</h1>${monthNav()}${scopeSeg()}<button class="btn" data-act="add">＋ Eintrag</button></div>`;
+  let h=`<div class="topbar"><h1>Übersicht</h1>${monthNav()}${scopeSeg()}</div>`;
   if(empty) h+=adm?`<div class="panel"><div class="ph"><h2>Willkommen</h2></div><p style="margin:0 0 8px">Noch keine Daten. Lade deine Startdaten aus dem Excel oder lege mit <b>Eintrag</b> los.</p><div class="actions"><button class="btn" data-act="seed">Startdaten laden</button></div></div>`
     :`<div class="panel"><div class="ph"><h2>Willkommen</h2></div><p style="margin:0">Noch keine Einträge. Lege mit <b>＋ Eintrag</b> deine Fixkosten an und trage unter Löhne deinen Lohn ein.</p></div>`;
   const kp=[['ein','Einnahmen','ein'],['mo','Monatliche Ausgaben','mon'],['ek','Einkaufskonto','ek'],['spar','Sparen','spar'],['steuer','Jahreskonto','steuer']];
@@ -1363,7 +1382,7 @@ function openEntry(id){
     <label class="f">Beschreibung<input name="name" value="${esc(e.name)}" placeholder="z. B. Netflix" autocomplete="off"></label>
     <div class="two-c"><label class="f"><span data-betrag>Betrag (CHF)</span><input name="betrag" type="number" step="any" inputmode="decimal" value="${e.betrag}" required></label>
     <label class="f" data-werwrap>Wer trägt die Kosten<select name="wer">${(adm?[['NJ','Nicola'],['VS','Vanessa'],['50/50','50/50']]:[['VS','Vanessa']]).map(([v,l])=>`<option value="${v}" ${e.wer===v?'selected':''}>${l}</option>`).join('')}</select></label></div>
-    ${adm?`<label class="f" data-kwrap>Bezahlt über<select name="konto"><option value="">Privatkonto</option><option value="einkauf" ${e.konto==='einkauf'?'selected':''}>Einkaufskonto (Miete, Essen …)</option></select></label>`:''}
+    ${adm?`<div class="two-c"><label class="f" data-pvwrap>Anteil Vanessa (%)<input name="pv" type="number" min="0" max="100" step="any" inputmode="decimal" value="${e.pv??50}"></label><label class="f" data-kwrap>Bezahlt über<select name="konto"><option value="">Privatkonto</option><option value="einkauf" ${e.konto==='einkauf'?'selected':''}>Einkaufskonto (Miete, Essen …)</option></select></label></div>`:''}
     <div class="two-c"><label class="f"><span data-ablab>Ab Monat</span><input name="ab" type="month" value="${toInput(e.ab)}" required></label>
     <label class="f" data-biswrap>Bis Monat (leer = läuft weiter)<input name="bis" type="month" value="${toInput(e.bis)}"></label></div>
     <div class="hint" data-hint></div><div class="err" data-err></div>
@@ -1381,11 +1400,12 @@ function openEntry(id){
     $('[data-biswrap]',f).style.display=oneShot(art)?'none':'';
     $('[data-ablab]',f).textContent=oneShot(art)?'Monat':'Ab Monat';
     $('[data-betrag]',f).textContent=art==='Jährlich'?'Jahresbetrag (CHF)':'Betrag (CHF)';
-    $('[data-werwrap]',f).style.display=(tr||lohn)?'none':'';
-    if(adm) $('[data-kwrap]',f).style.display=art==='Monatlich'?'':'none';
+    $('[data-werwrap]',f).style.display=tr?'none':'';
+    if(adm){ const geteilt=f.wer.value==='50/50'&&!tr; $('[data-pvwrap]',f).style.visibility=geteilt?'':'hidden'; $('[data-kwrap]',f).style.visibility=art==='Monatlich'?'':'hidden'; $('[data-pvwrap]',f).parentNode.style.display=(tr||(!geteilt&&art!=='Monatlich'))?'none':''; }
     const ab=fromInput(f.ab.value), b=r05(parseFloat(f.betrag.value)||0); let hint='';
     if(art==='Jährlich'&&b) hint=`= ${chf(r05(b/12))} pro Monat ans Jahreskonto`;
     if(tr&&b) hint=von==='VS'?`Vanessa überweist Nicola ${chf(b)} (einmalig). Bei Nicola zählt das als zusätzliche Einnahme, bei Vanessa als Ausgabe.`:`Nicola überweist Vanessa ${chf(b)} (einmalig). Bei Vanessa zählt das als zusätzliche Einnahme, bei Nicola als Ausgabe.`;
+    if(adm&&!tr&&f.wer.value==='50/50'&&b){ const p=Math.min(100,Math.max(0,parseFloat(f.pv.value)||0)); if(p!==50) hint=`Aufteilung: Vanessa ${p} %, Nicola ${100-p} %.`+(hint?' '+hint:''); }
     if(!hint && ab&&ab<nowKey()) hint='Vergangene Monate sind eingefroren und ändern sich nicht.';
     $('[data-hint]',f).textContent=hint;
   };
@@ -1402,6 +1422,7 @@ function openEntry(id){
     if(bis!=null && bis<ab){ err.textContent='«Bis Monat» liegt vor «Ab Monat».'; return; }
     const obj={art, kat:(art==='Lohn'||tr)?grpOf({art}):f.kat.value, name:f.name.value.trim(), betrag, wer:tr?'50/50':f.wer.value, ab, bis};
     if(adm && art==='Monatlich' && f.konto.value) obj.konto=f.konto.value;
+    if(adm && !tr && obj.wer==='50/50'){ const p=parseFloat(f.pv.value); if(!isNaN(p)&&Math.round(p*100)!==5000) obj.pv=Math.min(100,Math.max(0,p)); }
     if(tr) obj.von=von;
     if(!adm) obj.wer='VS';
     await autoFreeze();
